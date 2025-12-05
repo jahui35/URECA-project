@@ -1,0 +1,1 @@
+//	Handles file selection, upload, and calls to Firebase
