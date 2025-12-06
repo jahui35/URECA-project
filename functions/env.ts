@@ -1,0 +1,1 @@
+//Stores your OpenAI API key safely (never in frontend!)

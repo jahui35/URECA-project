@@ -1,0 +1,1 @@
+//Your secure backend code — this is where you:<br>• Receive image URL from frontend<br>• Call OpenAI (with your secret key)<br>• Return description
