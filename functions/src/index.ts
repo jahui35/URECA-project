@@ -1,32 +1,65 @@
-/**
- * Import function triggers from their respective submodules:
- *
- * import {onCall} from "firebase-functions/v2/https";
- * import {onDocumentWritten} from "firebase-functions/v2/firestore";
- *
- * See a full list of supported triggers at https://firebase.google.com/docs/functions
- */
-
-import {setGlobalOptions} from "firebase-functions";
-import {onRequest} from "firebase-functions/https";
+// functions/src/index.ts
+import {onCall} from "firebase-functions/v2/https";
 import * as logger from "firebase-functions/logger";
+import axios from "axios";
+import {defineSecret} from "firebase-functions/params";
 
-// Start writing functions
-// https://firebase.google.com/docs/functions/typescript
+// Define secret key
+const openaiKey = defineSecret("OPENAI_KEY");
 
-// For cost control, you can set the maximum number of containers that can be
-// running at the same time. This helps mitigate the impact of unexpected
-// traffic spikes by instead downgrading performance. This limit is a
-// per-function limit. You can override the limit for each function using the
-// `maxInstances` option in the function's options, e.g.
-// `onRequest({ maxInstances: 5 }, (req, res) => { ... })`.
-// NOTE: setGlobalOptions does not apply to functions using the v1 API. V1
-// functions should each use functions.runWith({ maxInstances: 10 }) instead.
-// In the v1 API, each function can only serve one request per container, so
-// this will be the maximum concurrent request count.
-setGlobalOptions({ maxInstances: 10 });
+// Export function with secret bound
+export const generateDescription = onCall(
+  {
+    cors: true,
+    secrets: [openaiKey],
+  },
+  async (request) => {
+    logger.info("Generating description for image:", request.data.imageUrl);
 
-// export const helloWorld = onRequest((request, response) => {
-//   logger.info("Hello logs!", {structuredData: true});
-//   response.send("Hello from Firebase!");
-// });
+    const {imageUrl} = request.data;
+
+    if (!imageUrl || typeof imageUrl !== "string") {
+      throw new Error("Missing or invalid 'imageUrl'");
+    }
+
+    try {
+      const response = await axios.post(
+        "https://api.openai.com/v1/chat/completions",
+        {
+          model: "gpt-4o-mini",
+          messages: [
+            {
+              role: "user",
+              content: [
+                {
+                  type: "text",
+                  text: "Describe this artwork in one vivid, clear sentence.",
+                },
+                {
+                  type: "image_url",
+                  image_url: {url: imageUrl},
+                },
+              ],
+            },
+          ],
+          max_tokens: 100,
+          temperature: 0.7,
+        },
+        {
+          headers: {
+            "Authorization": `Bearer ${openaiKey.value()}`,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      const description = response.data.choices[0].message.content.trim();
+      logger.info("Generated description:", description);
+      return {description};
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "Unknown error";
+      logger.error("OpenAI error:", message);
+      throw new Error("Failed to generate description");
+    }
+  }
+);

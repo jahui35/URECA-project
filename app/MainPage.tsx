@@ -1,6 +1,9 @@
 import React, { useState } from 'react';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { storage } from './firebase'; // ← Import Firebase Storage
+import { storage } from './firebaseapp'; //Import Firebase Storage
+import { getFunctions, httpsCallable } from 'firebase/functions';
+
+
 
 function MainPage() {
   const [imagePreview, setImagePreview] = useState<string | null>(null);
@@ -48,18 +51,25 @@ function MainPage() {
 
       // 2. Upload to Firebase Storage
       const fileName = `${Date.now()}.jpg`; // Unique name
+      console.log("Storage bucket:", storage.app.options.storageBucket);
       const storageRef = ref(storage, `artworks/${fileName}`);
       await uploadBytes(storageRef, blob);
 
       // 3. Get public URL
       const imageUrl = await getDownloadURL(storageRef);
 
-      // 4. For now, just show the URL (later we'll send it to AI)
-      setResult(`✅ Image uploaded! Public URL:\n${imageUrl}`);
+      // 4. Call the Cloud Function
+      const functions = getFunctions(); //automatically uses Firebase app
+      const generateDescription = httpsCallable(functions, 'generateDescription');
+
+      const { data } = await generateDescription({ imageUrl });
+      const aiDescription = (data as { description: string }).description;
+
+      setResult(aiDescription);
 
     } catch (error) {
       console.error("Upload failed:", error);
-      setResult("❌ Upload failed. Check console for details.");
+      setResult("Upload failed. Check console for details.");
     } finally {
       setUploading(false);
     }
